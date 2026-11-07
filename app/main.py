@@ -1,3 +1,12 @@
+import sys
+from pathlib import Path
+
+# Ensure the project root is importable when Streamlit runs app/main.py
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from services.prisma import transcribe_audio
 import html as _html
 import urllib.parse
 import uuid
@@ -560,16 +569,50 @@ elif page == "Create Agreement":
     with left:
         H('<div class="section-title" style="margin-top:22px;">01 &nbsp;Conversation</div>')
         with st.container(border=True):
-            language = st.selectbox("Conversation language", ["Hindi", "Hinglish", "Bengali", "English"])
+            language = st.selectbox(
+                "Conversation language",
+                ["Hindi", "Hinglish", "Bengali", "English"],
+            )
             audio = st.file_uploader(
                 "Upload an audio recording",
                 type=["wav", "mp3", "m4a", "ogg"],
                 help="Supported formats: WAV, MP3, M4A and OGG",
             )
+
             if audio:
                 st.audio(audio)
                 st.success(f"Recording ready: {audio.name}")
-            st.caption("Your recording will be processed using Gnani Prisma once API integration is enabled.")
+
+            if st.button("✦ Transcribe with Gnani Prisma", use_container_width=True):
+                if not audio:
+                    st.warning("Please upload an audio recording first.")
+                else:
+                    try:
+                        with st.spinner("Prisma is listening to your recording..."):
+                            language_codes = {
+                                "Hindi": "hi-IN",
+                                "Hinglish": "indic-auto",
+                                "Bengali": "bn-IN",
+                                "English": "en-IN",
+                            }
+
+                            result = transcribe_audio(
+                                audio_bytes=audio.getvalue(),
+                                filename=audio.name,
+                                language_code=language_codes[language],
+                            )
+
+                            st.session_state["transcript_box"] = result["transcript"]
+
+                        st.success("Transcription completed successfully!")
+                        if result.get("detected_language"):
+                            st.caption(
+                                f"Detected language: {result['detected_language']}"
+                            )
+                    except Exception as e:
+                        st.error(f"Transcription failed: {e}")
+
+            st.caption("Powered by Gnani Prisma")
 
         H('<div class="section-title">02 &nbsp;Transcript</div>')
         with st.container(border=True):
